@@ -63,6 +63,24 @@ type Body = {
   context: ChatContext
 }
 
+/**
+ * Gateway billing/auth failures are the most common reason this route dies in a
+ * fresh project, so we surface that case verbatim instead of a generic message.
+ */
+function describeError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error ?? '')
+  if (/credit card|billing|quota|insufficient/i.test(raw)) {
+    return 'The AI Gateway needs billing enabled before it will answer. Add a card to your Vercel team to unlock the free credits, then try again — the calendar and approval flow below keep working in the meantime.'
+  }
+  if (/api key|unauthorized|401|403/i.test(raw)) {
+    return 'The AI Gateway rejected the request. Reconnect the integration or add an AI_GATEWAY_API_KEY, then try again.'
+  }
+  if (/rate limit|429/i.test(raw)) {
+    return 'Rate limited by the model provider. Wait a moment and try again.'
+  }
+  return 'The assistant hit an error mid-response. Check the server logs for details.'
+}
+
 export async function POST(req: Request) {
   let body: Body
   try {
@@ -103,12 +121,12 @@ export async function POST(req: Request) {
             }
           } else if (part.type === 'error') {
             console.log('[v0] stream error part:', part.error)
-            send({ type: 'error', message: 'The assistant hit an error mid-response.' })
+            send({ type: 'error', message: describeError(part.error) })
           }
         }
       } catch (error) {
         console.log('[v0] chat stream failed:', error)
-        send({ type: 'error', message: 'The assistant is unavailable right now.' })
+        send({ type: 'error', message: describeError(error) })
       } finally {
         controller.close()
       }

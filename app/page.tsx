@@ -1,47 +1,237 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { Sparkles, X } from 'lucide-react'
+import { AiPanel } from '@/components/ai-panel'
+import { ApprovalCard } from '@/components/approval-card'
+import { CalendarHeader, type CalendarView } from '@/components/calendar-header'
+import { CommandPalette } from '@/components/command-palette'
+import { DayView } from '@/components/day-view'
+import { EventDialog } from '@/components/event-dialog'
+import { Modal, ModalHeader } from '@/components/modal'
+import { MonthView } from '@/components/month-view'
+import { Sidebar } from '@/components/sidebar'
+import { TopBar } from '@/components/top-bar'
+import { WeekGrid } from '@/components/week-grid'
+import { useAssistant } from '@/hooks/use-assistant'
+import { useStore } from '@/lib/store'
+import { addDays } from '@/lib/time'
+import type { CalendarEvent } from '@/lib/types'
+
 export default function Page() {
+  const { state, dispatch, pendingCount, createQuickEvent } = useStore()
+  const { send } = useAssistant()
+
+  const [anchor, setAnchor] = useState(() => new Date())
+  const [view, setView] = useState<CalendarView>('Week')
+  const [collapsed, setCollapsed] = useState(false)
+  const [expandedPanel, setExpandedPanel] = useState(false)
+  const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [changesOpen, setChangesOpen] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+
+  // the AI rail is docked from lg up; below that it opens as an overlay sheet
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const apply = () => {
+      setCollapsed(!mq.matches)
+      if (mq.matches) setAssistantOpen(false)
+    }
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  // the step size depends on which view is on screen
+  const step = view === 'Day' ? 1 : view === 'Week' ? 7 : 0
+  const shift = useCallback(
+    (direction: 1 | -1) => {
+      setAnchor((current) => {
+        if (view === 'Month') {
+          const next = new Date(current)
+          next.setMonth(next.getMonth() + direction)
+          return next
+        }
+        return addDays(current, step * direction)
+      })
+    },
+    [view, step],
+  )
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  function newEvent() {
+    const created = createQuickEvent(anchor, Math.max(8, new Date().getHours()))
+    setActiveEvent(created)
+  }
+
+  const resolved = state.pending.filter((c) => c.status !== 'pending')
+  const open = state.pending.filter((c) => c.status === 'pending')
+
   return (
-    <main
-      style={{
-        colorScheme: 'light dark',
-        position: 'relative',
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'light-dark(#fff, #000)',
-        color: 'light-dark(#000, #fff)',
-      }}
-    >
-      <svg
-        aria-hidden="true"
-        style={{ width: 80, height: 80 }}
-        width={80}
-        height={80}
-        fill="none"
-        viewBox="0 0 20 20"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke="currentColor"
-        strokeWidth="0.5"
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+      <Sidebar
+        active="calendar"
+        collapsed={collapsed}
+        onToggleCollapsed={() => setCollapsed((c) => !c)}
+        onViewChanges={() => setChangesOpen(true)}
+        pendingCount={pendingCount}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar onOpenSearch={() => setPaletteOpen(true)} onNewEvent={newEvent} />
+
+        <div className="flex min-h-0 flex-1">
+          <main className="flex min-w-0 flex-1 flex-col px-4 pb-4 sm:px-5">
+            <CalendarHeader
+              anchor={anchor}
+              view={view}
+              onView={setView}
+              onPrev={() => shift(-1)}
+              onNext={() => shift(1)}
+              onToday={() => setAnchor(new Date())}
+            />
+
+            {view === 'Week' ? (
+              <WeekGrid anchor={anchor} onOpenEvent={setActiveEvent} />
+            ) : view === 'Day' ? (
+              <DayView anchor={anchor} onOpenEvent={setActiveEvent} />
+            ) : (
+              <MonthView anchor={anchor} onOpenEvent={setActiveEvent} />
+            )}
+          </main>
+
+          <div className="hidden lg:block">
+            <AiPanel
+              expanded={expandedPanel}
+              onToggleExpanded={() => setExpandedPanel((e) => !e)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* below lg the rail is unreachable, so surface it behind a floating button */}
+      <button
+        type="button"
+        onClick={() => setAssistantOpen(true)}
+        aria-label={
+          pendingCount
+            ? `Open AI assistant, ${pendingCount} changes awaiting approval`
+            : 'Open AI assistant'
+        }
+        className="fixed bottom-4 right-4 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 lg:hidden"
       >
-        <path
-          d="M14.2 14.2H17V6.9375C17 4.76288 15.2371 3 13.0625 3H5.8V5.8M14.2 14.2V7.79063L7.79062 14.2H14.2ZM14.2 14.2V17H6.9375C4.76288 17 3 15.2371 3 13.0625V5.8H5.8M5.8 5.8V12.2313L12.2313 5.8H5.8Z"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <p
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: 'calc(50% + 56px)',
-          transform: 'translateX(-50%)',
-          whiteSpace: 'nowrap',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'light-dark(#71717a, #a1a1aa)',
-        }}
+        <Sparkles className="size-5" strokeWidth={2.2} aria-hidden />
+        {pendingCount ? (
+          <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white ring-2 ring-background">
+            {pendingCount}
+          </span>
+        ) : null}
+      </button>
+
+      {assistantOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-foreground/25 backdrop-blur-[2px] lg:hidden"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setAssistantOpen(false)
+          }}
+        >
+          <div className="relative flex h-full w-[min(100%,340px)] animate-in slide-in-from-right duration-200">
+            <button
+              type="button"
+              onClick={() => setAssistantOpen(false)}
+              aria-label="Close assistant"
+              className="absolute -left-11 top-4 flex size-9 items-center justify-center rounded-full bg-panel text-muted-foreground shadow-md"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+            <AiPanel
+              expanded
+              onToggleExpanded={() => setAssistantOpen(false)}
+              className="w-full"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <EventDialog event={activeEvent} onClose={() => setActiveEvent(null)} />
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onOpenEvent={setActiveEvent}
+        onAsk={send}
+      />
+
+      <Modal
+        open={changesOpen}
+        onClose={() => setChangesOpen(false)}
+        label="Proposed changes"
       >
-        Your v0 generation will show here.
-      </p>
-    </main>
+        <ModalHeader
+          title="Proposed changes"
+          subtitle={
+            open.length
+              ? `${open.length} waiting for your approval`
+              : 'Nothing waiting on you right now'
+          }
+          onClose={() => setChangesOpen(false)}
+        >
+          {open.length > 1 ? (
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'approveAll' })}
+              className="shrink-0 rounded-lg bg-accent px-2.5 py-1 text-[12px] font-semibold text-accent-foreground transition-colors hover:bg-accent/70"
+            >
+              Approve all
+            </button>
+          ) : null}
+        </ModalHeader>
+
+        <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto px-5 py-4">
+          {state.pending.length ? (
+            <>
+              {open.map((change) => (
+                <ApprovalCard key={change.id} change={change} />
+              ))}
+              {resolved.length ? (
+                <>
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      History
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => dispatch({ type: 'clearResolved' })}
+                      className="text-[11.5px] font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {resolved.map((change) => (
+                    <ApprovalCard key={change.id} change={change} />
+                  ))}
+                </>
+              ) : null}
+            </>
+          ) : (
+            <p className="py-6 text-center text-[13px] leading-relaxed text-muted-foreground">
+              Ask the assistant to reshape your week. Every change it drafts lands
+              here for approval before it touches your calendar.
+            </p>
+          )}
+        </div>
+      </Modal>
+    </div>
   )
 }

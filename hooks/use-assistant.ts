@@ -79,7 +79,10 @@ export function useAssistant() {
           }),
         })
 
-        if (!res.ok || !res.body) throw new Error(`Request failed: ${res.status}`)
+        if (!res.ok || !res.body) {
+          const detail = await res.text().catch(() => '')
+          throw new Error(detail || `Request failed: ${res.status}`)
+        }
 
         const reader = res.body.getReader()
         const decoder = new TextDecoder()

@@ -65,9 +65,11 @@ function SummaryTile({
 export function AiPanel({
   expanded,
   onToggleExpanded,
+  className,
 }: {
   expanded: boolean
   onToggleExpanded: () => void
+  className?: string
 }) {
   const { state, dispatch, visibleEvents, queueProposals, pendingCount } = useStore()
   const { send, busy, messages } = useAssistant()
@@ -102,6 +104,7 @@ export function AiPanel({
       className={cn(
         'flex h-full flex-col overflow-hidden border-l border-border bg-panel',
         expanded ? 'w-[420px]' : 'w-[268px]',
+        className,
       )}
       aria-label="AI Assistant"
     >

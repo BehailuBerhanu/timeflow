@@ -10,19 +10,30 @@ import {
   useRef,
   type ReactNode,
 } from 'react'
-import { CALENDARS, CONNECTIONS, seedEvents } from './seed-data'
+import {
+  CALENDARS,
+  CONNECTIONS,
+  DEFAULT_SETTINGS,
+  seedBookingLinks,
+  seedEvents,
+  seedTasks,
+} from './seed-data'
 import { addMinutes, atTime, toLocalISO } from './time'
 import type {
+  Booking,
+  BookingLink,
   CalendarEvent,
   CalendarSource,
   ChatMessage,
   Connection,
   PendingChange,
   ProposedChange,
+  Settings,
+  Task,
   Theme,
 } from './types'
 
-const STORAGE_KEY = 'timeflow:v1'
+const STORAGE_KEY = 'timeflow:v2'
 
 type State = {
   events: CalendarEvent[]
@@ -31,6 +42,10 @@ type State = {
   chat: ChatMessage[]
   pending: PendingChange[]
   dismissed: string[]
+  tasks: Task[]
+  bookingLinks: BookingLink[]
+  bookings: Booking[]
+  settings: Settings
   theme: Theme
   hydrated: boolean
 }
@@ -44,6 +59,10 @@ const initialState: State = {
   chat: [],
   pending: [],
   dismissed: [],
+  tasks: seedTasks(),
+  bookingLinks: seedBookingLinks(),
+  bookings: [],
+  settings: DEFAULT_SETTINGS,
   theme: 'light',
   hydrated: false,
 }

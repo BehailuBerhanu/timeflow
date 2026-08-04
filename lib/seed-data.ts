@@ -1,5 +1,13 @@
 import { atTime, startOfWeek, addDays, toLocalISO } from './time'
-import type { CalendarEvent, CalendarSource, Connection, Person } from './types'
+import type {
+  BookingLink,
+  CalendarEvent,
+  CalendarSource,
+  Connection,
+  Person,
+  Settings,
+  Task,
+} from './types'
 
 export const PEOPLE: Person[] = [
   { id: 'you', name: 'Daniel Okafor', avatar: '/avatars/you.png' },
@@ -141,6 +149,142 @@ export function seedEvents(now = new Date()): CalendarEvent[] {
     },
   ]
 }
+
+const isoDate = (d: Date) => toLocalISO(d).slice(0, 10)
+
+/**
+ * Tasks are anchored to the same reference week as the events so the "linked
+ * event" relationship is always real rather than a dangling id.
+ */
+export function seedTasks(now = new Date()): Task[] {
+  const week = startOfWeek(now)
+  const day = (i: number) => addDays(week, i)
+  return [
+    {
+      id: 't-agenda',
+      title: 'Write agenda for Team Sync',
+      due: isoDate(day(1)),
+      done: true,
+      eventId: 'e-team-sync-mon',
+      sourceId: 'notion',
+      createdAt: toLocalISO(day(0)),
+    },
+    {
+      id: 't-deck',
+      title: 'Finish Q3 roadmap deck',
+      due: isoDate(day(1)),
+      done: false,
+      eventId: 'e-project-update',
+      sourceId: 'notion',
+      createdAt: toLocalISO(day(0)),
+    },
+    {
+      id: 't-review-specs',
+      title: 'Review design specs before review',
+      due: isoDate(day(1)),
+      done: false,
+      eventId: 'e-design-review',
+      sourceId: 'slack',
+      createdAt: toLocalISO(day(1)),
+    },
+    {
+      id: 't-thesis',
+      title: 'Draft thesis outline',
+      due: isoDate(day(2)),
+      done: false,
+      eventId: 'e-deep-work-tue',
+      sourceId: 'notion',
+      createdAt: toLocalISO(day(1)),
+    },
+    {
+      id: 't-book-table',
+      title: 'Book a table for lunch with Alex',
+      due: isoDate(day(4)),
+      done: false,
+      eventId: 'e-lunch-alex',
+      sourceId: 'gmail',
+      createdAt: toLocalISO(day(2)),
+    },
+    {
+      id: 't-client-brief',
+      title: 'Send client the pre-call brief',
+      due: isoDate(day(5)),
+      done: false,
+      eventId: 'e-client-call',
+      sourceId: 'gmail',
+      createdAt: toLocalISO(day(3)),
+    },
+    {
+      id: 't-expenses',
+      title: 'Submit expense report',
+      due: isoDate(day(5)),
+      done: false,
+      sourceId: 'gmail',
+      createdAt: toLocalISO(day(3)),
+    },
+  ]
+}
+
+export function seedBookingLinks(now = new Date()): BookingLink[] {
+  return [
+    {
+      id: 'bl-intro',
+      name: 'Intro call',
+      slug: 'intro-30',
+      duration: 30,
+      availability: { days: [1, 2, 3, 4, 5], from: '10:00', to: '16:00' },
+      buffer: 10,
+      createdAt: toLocalISO(now),
+    },
+    {
+      id: 'bl-office-hours',
+      name: 'Office hours',
+      slug: 'office-hours',
+      duration: 15,
+      availability: { days: [2, 4], from: '15:00', to: '17:00' },
+      buffer: 0,
+      createdAt: toLocalISO(now),
+    },
+  ]
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  timezone: 'UTC',
+  workdayStart: '09:00',
+  workdayEnd: '18:00',
+  workdays: [1, 2, 3, 4, 5],
+  focusBlockMinutes: 120,
+  protectFocus: true,
+  weekStartsOn: 0,
+  notifications: {
+    proposals: true,
+    dailyDigest: true,
+    conflicts: true,
+    bookings: false,
+  },
+}
+
+/** a compact, well-known list — enough to feel real without shipping the full IANA db */
+export const TIMEZONES = [
+  'UTC',
+  'America/Los_Angeles',
+  'America/Denver',
+  'America/Chicago',
+  'America/New_York',
+  'America/Sao_Paulo',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Paris',
+  'Europe/Madrid',
+  'Africa/Lagos',
+  'Africa/Nairobi',
+  'Africa/Addis_Ababa',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+]
 
 export const CONNECTIONS: Connection[] = [
   {

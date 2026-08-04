@@ -10,7 +10,7 @@ import {
   addDays,
   toLocalISO,
 } from './time'
-import type { CalendarEvent, PendingChange, Suggestion } from './types'
+import type { CalendarEvent, Connection, PendingChange, Suggestion } from './types'
 
 const DAY_NAMES = [
   'Sunday',
@@ -58,7 +58,15 @@ export function buildSuggestions(
   events: CalendarEvent[],
   anchor: Date,
   dismissed: string[],
+  connections: Connection[] = [],
 ): Suggestion[] {
+  const connected = new Set(connections.filter((c) => c.connected).map((c) => c.id))
+
+  /** filter a list of source IDs down to only those currently connected */
+  function activeSources(ids: string[]): string[] {
+    return ids.filter((id) => connected.has(id))
+  }
+
   const out: Suggestion[] = []
 
   // 1. resolve the first real double-booking in the week
@@ -87,6 +95,7 @@ export function buildSuggestions(
         end: toLocalISO(addMinutes(target, durationMinutes(later))),
         reason: 'Clears an overlap with an earlier meeting.',
       },
+      sources: activeSources(['google-calendar', 'gmail']),
     })
   }
 
@@ -113,6 +122,7 @@ export function buildSuggestions(
         calendarId: 'school',
         reason: 'Your longest uninterrupted stretch tomorrow.',
       },
+      sources: activeSources(['google-calendar', 'notion']),
     })
   }
 
@@ -134,6 +144,7 @@ export function buildSuggestions(
           end: toLocalISO(addMinutes(target, durationMinutes(social))),
           reason: `${DAY_NAMES[quiet.getDay()]} has the lightest meeting load this week.`,
         },
+        sources: activeSources(['google-calendar', 'slack']),
       })
     }
   }

@@ -11,6 +11,7 @@ import {
   ListTodo,
   Moon,
   Plus,
+  Settings,
   Sparkles,
   Sun,
 } from 'lucide-react'
@@ -20,11 +21,12 @@ import type { Tone } from '@/lib/types'
 
 const NAV = [
   { id: 'calendar', label: 'Calendar', icon: CalendarIcon, href: '/' },
-  { id: 'home', label: 'Home', icon: House, href: '/' },
-  { id: 'tasks', label: 'Tasks', icon: ListTodo, href: '/' },
-  { id: 'bookings', label: 'Bookings', icon: CalendarCheck, href: '/' },
-  { id: 'analytics', label: 'Analytics', icon: ChartNoAxesColumn, href: '/' },
+  { id: 'home', label: 'Home', icon: House, href: '/home' },
+  { id: 'tasks', label: 'Tasks', icon: ListTodo, href: '/tasks' },
+  { id: 'bookings', label: 'Bookings', icon: CalendarCheck, href: '/bookings' },
+  { id: 'analytics', label: 'Analytics', icon: ChartNoAxesColumn, href: '/analytics' },
   { id: 'connections', label: 'Connections', icon: Link2, href: '/connections' },
+  { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
 ]
 
 const TONE_SWATCH: Record<Tone, string> = {

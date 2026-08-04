@@ -41,6 +41,8 @@ export type Suggestion = {
   detail: string
   /** the change this suggestion would queue for approval */
   change: ProposedChange
+  /** connection IDs that informed this suggestion, e.g. ['google-calendar', 'notion'] */
+  sources: string[]
 }
 
 export type ProposedChange =
@@ -96,3 +98,68 @@ export type Connection = {
 }
 
 export type Theme = 'light' | 'dark'
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export type NotificationChannel = 'email' | 'push' | 'slack'
+
+export type Settings = {
+  /** IANA timezone string, e.g. "America/New_York" */
+  timezone: string
+  /** 24h hour when the working day starts */
+  workdayStart: number
+  /** 24h hour when the working day ends */
+  workdayEnd: number
+  /** preferred hour to start a focus block */
+  focusStartHour: number
+  /** preferred hour to end focus blocks */
+  focusEndHour: number
+  /** minimum acceptable focus block length in minutes */
+  focusMinDuration: number
+  /** notification preferences — UI-only, no real sends */
+  notifications: {
+    channel: NotificationChannel
+    enabled: boolean
+    /** minutes before event */
+    reminderMinutes: number
+    aiSuggestions: boolean
+    weeklyDigest: boolean
+    conflictAlerts: boolean
+  }
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+export type TaskPriority = 'high' | 'medium' | 'low'
+
+export type Task = {
+  id: string
+  title: string
+  /** ISO date string (date only, no time) */
+  dueDate: string
+  done: boolean
+  priority: TaskPriority
+  /** optional id of a CalendarEvent this task is linked to */
+  linkedEventId?: string
+  calendarId: string
+}
+
+// ─── Bookings ─────────────────────────────────────────────────────────────────
+
+export type BookingSlot = {
+  /** day-of-week: 0=Sun … 6=Sat */
+  day: number
+  /** 24h hour start */
+  startHour: number
+  /** 24h hour end */
+  endHour: number
+}
+
+export type BookingLink = {
+  id: string
+  title: string
+  slug: string
+  durationMinutes: number
+  availability: BookingSlot[]
+  active: boolean
+}

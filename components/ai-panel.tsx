@@ -19,7 +19,9 @@ import { useAssistant } from '@/hooks/use-assistant'
 import { buildSuggestions, summarize } from '@/lib/suggestions'
 import { formatDuration } from '@/lib/time'
 import { ApprovalCard } from './approval-card'
+import { SuggestionDiffModal } from './suggestion-diff-modal'
 import { cn } from '@/lib/utils'
+import type { Suggestion } from '@/lib/types'
 
 const SUGGESTION_ICONS = {
   zap: Zap,
@@ -65,21 +67,24 @@ function SummaryTile({
 export function AiPanel({
   expanded,
   onToggleExpanded,
+  onEditEvent,
   className,
 }: {
   expanded: boolean
   onToggleExpanded: () => void
+  onEditEvent?: (eventId: string) => void
   className?: string
 }) {
   const { state, dispatch, visibleEvents, queueProposals, pendingCount } = useStore()
   const { send, busy, messages } = useAssistant()
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [activeSuggestion, setActiveSuggestion] = useState<Suggestion | null>(null)
 
   const today = useMemo(() => new Date(), [])
   const suggestions = useMemo(
-    () => buildSuggestions(state.events, today, state.dismissed),
-    [state.events, today, state.dismissed],
+    () => buildSuggestions(state.events, today, state.dismissed, state.connections),
+    [state.events, today, state.dismissed, state.connections],
   )
   const stats = useMemo(
     () => summarize(visibleEvents, state.pending, today),
@@ -184,6 +189,9 @@ export function AiPanel({
             <ul className="divide-y divide-border">
               {suggestions.map((s) => {
                 const Icon = SUGGESTION_ICONS[s.icon]
+                const sourceNames = s.sources
+                  .map((id) => state.connections.find((c) => c.id === id)?.name)
+                  .filter(Boolean) as string[]
                 return (
                   <li key={s.id} className="group/sg flex items-start gap-2.5 py-2.5">
                     <Icon
@@ -193,7 +201,7 @@ export function AiPanel({
                     />
                     <button
                       type="button"
-                      onClick={() => queueProposals([s.change])}
+                      onClick={() => setActiveSuggestion(s)}
                       className="min-w-0 flex-1 text-left"
                     >
                       <p className="text-[13px] font-semibold leading-snug text-foreground">
@@ -202,6 +210,12 @@ export function AiPanel({
                       <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
                         {s.detail}
                       </p>
+                      {sourceNames.length > 0 && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] leading-snug text-muted-foreground/70">
+                          <Sparkles className="size-2.5 shrink-0 text-brand/60" aria-hidden />
+                          based on {sourceNames.join(' and ')}
+                        </p>
+                      )}
                     </button>
                     <button
                       type="button"
@@ -294,6 +308,16 @@ export function AiPanel({
           </button>
         </div>
       </div>
+
+      <SuggestionDiffModal
+        suggestion={activeSuggestion}
+        onClose={() => setActiveSuggestion(null)}
+        onApproved={() => setActiveSuggestion(null)}
+        onEdit={(eventId) => {
+          setActiveSuggestion(null)
+          if (eventId && onEditEvent) onEditEvent(eventId)
+        }}
+      />
     </aside>
   )
 }

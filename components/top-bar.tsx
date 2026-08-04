@@ -68,8 +68,8 @@ export function TopBar({
             <CircleQuestionMark className="size-[18px]" aria-hidden />
           </button>
           <a
-            href="/connections"
-            aria-label="Connections and settings"
+            href="/settings"
+            aria-label="Settings"
             className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <Settings className="size-[18px]" aria-hidden />

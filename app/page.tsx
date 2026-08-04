@@ -15,23 +15,28 @@ import { TopBar } from '@/components/top-bar'
 import { WeekGrid } from '@/components/week-grid'
 import { useAssistant } from '@/hooks/use-assistant'
 import { useStore } from '@/lib/store'
-import { addDays } from '@/lib/time'
+import { addDays, atTime, addMinutes, toLocalISO } from '@/lib/time'
 import type { CalendarEvent } from '@/lib/types'
 
 export default function Page() {
-  const { state, dispatch, pendingCount, createQuickEvent } = useStore()
+  const { state, dispatch, pendingCount } = useStore()
   const { send } = useAssistant()
 
   const [anchor, setAnchor] = useState(() => new Date())
   const [view, setView] = useState<CalendarView>('Week')
   const [collapsed, setCollapsed] = useState(false)
   const [expandedPanel, setExpandedPanel] = useState(false)
-  const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null)
+
+  // edit mode: open an existing event
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null)
+  // create mode: a template with prefilled start/end/calendar
+  const [createTemplate, setCreateTemplate] = useState<CalendarEvent | null>(null)
+
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
 
-  // the AI rail is docked from lg up; below that it opens as an overlay sheet
+  // The AI rail is docked from lg up; below that it opens as an overlay sheet
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
     const apply = () => {
@@ -43,7 +48,6 @@ export default function Page() {
     return () => mq.removeEventListener('change', apply)
   }, [])
 
-  // the step size depends on which view is on screen
   const step = view === 'Day' ? 1 : view === 'Week' ? 7 : 0
   const shift = useCallback(
     (direction: 1 | -1) => {
@@ -70,9 +74,30 @@ export default function Page() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  function newEvent() {
-    const created = createQuickEvent(anchor, Math.max(8, new Date().getHours()))
-    setActiveEvent(created)
+  /** Open create form with a sensible default time for the current anchor day */
+  function openNewEvent() {
+    const hour = Math.max(8, new Date().getHours() + 1)
+    const start = atTime(anchor, hour, 0)
+    const template: CalendarEvent = {
+      id: '',
+      title: '',
+      start: toLocalISO(start),
+      end: toLocalISO(addMinutes(start, 60)),
+      calendarId: 'work',
+      tone: 'blue',
+      attendees: [],
+    }
+    setCreateTemplate(template)
+  }
+
+  /** Called from WeekGrid / DayView / MonthView double-click — also opens create form */
+  function openCreateAt(event: CalendarEvent) {
+    // If the event already has an id (i.e. it's a real existing event), edit it
+    if (event.id) {
+      setEditEvent(event)
+    } else {
+      setCreateTemplate(event)
+    }
   }
 
   const resolved = state.pending.filter((c) => c.status !== 'pending')
@@ -89,7 +114,7 @@ export default function Page() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onOpenSearch={() => setPaletteOpen(true)} onNewEvent={newEvent} />
+        <TopBar onOpenSearch={() => setPaletteOpen(true)} onNewEvent={openNewEvent} />
 
         <div className="flex min-h-0 flex-1">
           <main className="flex min-w-0 flex-1 flex-col px-4 pb-4 sm:px-5">
@@ -103,11 +128,15 @@ export default function Page() {
             />
 
             {view === 'Week' ? (
-              <WeekGrid anchor={anchor} onOpenEvent={setActiveEvent} />
+              <WeekGrid
+                anchor={anchor}
+                onOpenEvent={(e) => setEditEvent(e)}
+                onCreateAt={(template) => setCreateTemplate(template)}
+              />
             ) : view === 'Day' ? (
-              <DayView anchor={anchor} onOpenEvent={setActiveEvent} />
+              <DayView anchor={anchor} onOpenEvent={(e) => setEditEvent(e)} />
             ) : (
-              <MonthView anchor={anchor} onOpenEvent={setActiveEvent} />
+              <MonthView anchor={anchor} onOpenEvent={(e) => setEditEvent(e)} />
             )}
           </main>
 
@@ -115,12 +144,16 @@ export default function Page() {
             <AiPanel
               expanded={expandedPanel}
               onToggleExpanded={() => setExpandedPanel((e) => !e)}
+              onEditEvent={(eventId) => {
+                const ev = state.events.find((e) => e.id === eventId)
+                if (ev) setEditEvent(ev)
+              }}
             />
           </div>
         </div>
       </div>
 
-      {/* below lg the rail is unreachable, so surface it behind a floating button */}
+      {/* Below lg: floating AI button */}
       <button
         type="button"
         onClick={() => setAssistantOpen(true)}
@@ -158,21 +191,45 @@ export default function Page() {
             <AiPanel
               expanded
               onToggleExpanded={() => setAssistantOpen(false)}
+              onEditEvent={(eventId) => {
+                const ev = state.events.find((e) => e.id === eventId)
+                if (ev) {
+                  setAssistantOpen(false)
+                  setEditEvent(ev)
+                }
+              }}
               className="w-full"
             />
           </div>
         </div>
       ) : null}
 
-      <EventDialog event={activeEvent} onClose={() => setActiveEvent(null)} />
+      {/* Edit existing event */}
+      <EventDialog
+        event={editEvent}
+        onClose={() => setEditEvent(null)}
+      />
+
+      {/* Create new event */}
+      <EventDialog
+        event={null}
+        newEventTemplate={createTemplate}
+        onClose={() => setCreateTemplate(null)}
+      />
 
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        onOpenEvent={setActiveEvent}
-        onAsk={send}
+        onOpenEvent={(e) => setEditEvent(e)}
+        onAsk={(prompt) => {
+          send(prompt)
+          setPaletteOpen(false)
+          // expand the AI panel so the user sees the response
+          setExpandedPanel(true)
+        }}
       />
 
+      {/* View changes / changelog modal */}
       <Modal
         open={changesOpen}
         onClose={() => setChangesOpen(false)}

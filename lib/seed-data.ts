@@ -232,3 +232,131 @@ export const CONNECTIONS: Connection[] = [
     accent: '#20808d',
   },
 ]
+
+import type { BookingLink, Task } from './types'
+
+// ─── Tasks seed ───────────────────────────────────────────────────────────────
+
+export function seedTasks(now = new Date()): Task[] {
+  const week = startOfWeek(now)
+  const dateStr = (offset: number) => {
+    const d = addDays(week, offset)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  return [
+    {
+      id: 't-1',
+      title: 'Finalize Q3 project proposal',
+      dueDate: dateStr(1),
+      done: false,
+      priority: 'high',
+      linkedEventId: 'e-project-update',
+      calendarId: 'work',
+    },
+    {
+      id: 't-2',
+      title: 'Review design mockups before meeting',
+      dueDate: dateStr(1),
+      done: true,
+      priority: 'high',
+      linkedEventId: 'e-design-review',
+      calendarId: 'work',
+    },
+    {
+      id: 't-3',
+      title: 'Send weekly status update to team',
+      dueDate: dateStr(2),
+      done: false,
+      priority: 'medium',
+      calendarId: 'work',
+    },
+    {
+      id: 't-4',
+      title: 'Read chapter 4 of "Deep Work"',
+      dueDate: dateStr(2),
+      done: false,
+      priority: 'low',
+      linkedEventId: 'e-deep-work-tue',
+      calendarId: 'school',
+    },
+    {
+      id: 't-5',
+      title: 'Book restaurant for lunch with Alex',
+      dueDate: dateStr(4),
+      done: false,
+      priority: 'medium',
+      linkedEventId: 'e-lunch-alex',
+      calendarId: 'personal',
+    },
+    {
+      id: 't-6',
+      title: 'Prepare 1:1 talking points',
+      dueDate: dateStr(5),
+      done: false,
+      priority: 'high',
+      linkedEventId: 'e-one-on-one',
+      calendarId: 'work',
+    },
+    {
+      id: 't-7',
+      title: 'Submit client deliverables',
+      dueDate: dateStr(5),
+      done: false,
+      priority: 'high',
+      linkedEventId: 'e-client-call',
+      calendarId: 'work',
+    },
+    {
+      id: 't-8',
+      title: 'Gym — track workout notes',
+      dueDate: dateStr(1),
+      done: true,
+      priority: 'low',
+      linkedEventId: 'e-gym',
+      calendarId: 'fitness',
+    },
+  ]
+}
+
+// ─── Bookings seed ────────────────────────────────────────────────────────────
+
+export const BOOKING_LINKS: BookingLink[] = [
+  {
+    id: 'bl-intro',
+    title: '30-min Intro Call',
+    slug: 'daniel/intro',
+    durationMinutes: 30,
+    active: true,
+    availability: [
+      { day: 1, startHour: 9, endHour: 12 },
+      { day: 2, startHour: 9, endHour: 12 },
+      { day: 3, startHour: 14, endHour: 17 },
+      { day: 4, startHour: 9, endHour: 12 },
+      { day: 5, startHour: 10, endHour: 13 },
+    ],
+  },
+  {
+    id: 'bl-deep',
+    title: '60-min Deep Dive',
+    slug: 'daniel/deep-dive',
+    durationMinutes: 60,
+    active: true,
+    availability: [
+      { day: 2, startHour: 14, endHour: 17 },
+      { day: 4, startHour: 14, endHour: 17 },
+    ],
+  },
+  {
+    id: 'bl-quick',
+    title: '15-min Quick Sync',
+    slug: 'daniel/quick-sync',
+    durationMinutes: 15,
+    active: false,
+    availability: [
+      { day: 1, startHour: 13, endHour: 15 },
+      { day: 3, startHour: 13, endHour: 15 },
+      { day: 5, startHour: 13, endHour: 15 },
+    ],
+  },
+]

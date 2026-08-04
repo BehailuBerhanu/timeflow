@@ -10,19 +10,41 @@ import {
   useRef,
   type ReactNode,
 } from 'react'
-import { CALENDARS, CONNECTIONS, seedEvents } from './seed-data'
+import { CALENDARS, CONNECTIONS, BOOKING_LINKS, seedEvents, seedTasks } from './seed-data'
 import { addMinutes, atTime, toLocalISO } from './time'
 import type {
+  BookingLink,
   CalendarEvent,
   CalendarSource,
   ChatMessage,
   Connection,
   PendingChange,
   ProposedChange,
+  Settings,
+  Task,
   Theme,
 } from './types'
 
 const STORAGE_KEY = 'timeflow:v1'
+
+const DEFAULT_SETTINGS: Settings = {
+  timezone: typeof Intl !== 'undefined'
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : 'UTC',
+  workdayStart: 9,
+  workdayEnd: 18,
+  focusStartHour: 9,
+  focusEndHour: 13,
+  focusMinDuration: 90,
+  notifications: {
+    channel: 'push',
+    enabled: true,
+    reminderMinutes: 10,
+    aiSuggestions: true,
+    weeklyDigest: true,
+    conflictAlerts: true,
+  },
+}
 
 type State = {
   events: CalendarEvent[]
@@ -31,6 +53,9 @@ type State = {
   chat: ChatMessage[]
   pending: PendingChange[]
   dismissed: string[]
+  tasks: Task[]
+  bookingLinks: BookingLink[]
+  settings: Settings
   theme: Theme
   hydrated: boolean
 }
@@ -44,6 +69,9 @@ const initialState: State = {
   chat: [],
   pending: [],
   dismissed: [],
+  tasks: seedTasks(),
+  bookingLinks: BOOKING_LINKS,
+  settings: DEFAULT_SETTINGS,
   theme: 'light',
   hydrated: false,
 }
@@ -64,6 +92,14 @@ type Action =
   | { type: 'addMessage'; message: ChatMessage }
   | { type: 'patchMessage'; id: string; patch: Partial<ChatMessage> }
   | { type: 'resetChat' }
+  | { type: 'addTask'; task: Task }
+  | { type: 'toggleTask'; id: string }
+  | { type: 'deleteTask'; id: string }
+  | { type: 'updateTask'; id: string; patch: Partial<Task> }
+  | { type: 'addBookingLink'; link: BookingLink }
+  | { type: 'updateBookingLink'; id: string; patch: Partial<BookingLink> }
+  | { type: 'deleteBookingLink'; id: string }
+  | { type: 'updateSettings'; patch: Partial<Settings> }
 
 function applyChange(events: CalendarEvent[], change: PendingChange): CalendarEvent[] {
   if (change.kind === 'create') {
@@ -165,6 +201,47 @@ function reducer(state: State, action: Action): State {
       }
     case 'resetChat':
       return { ...state, chat: [] }
+    case 'addTask':
+      return { ...state, tasks: [...state.tasks, action.task] }
+    case 'toggleTask':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === action.id ? { ...t, done: !t.done } : t,
+        ),
+      }
+    case 'deleteTask':
+      return { ...state, tasks: state.tasks.filter((t) => t.id !== action.id) }
+    case 'updateTask':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === action.id ? { ...t, ...action.patch } : t,
+        ),
+      }
+    case 'addBookingLink':
+      return { ...state, bookingLinks: [...state.bookingLinks, action.link] }
+    case 'updateBookingLink':
+      return {
+        ...state,
+        bookingLinks: state.bookingLinks.map((l) =>
+          l.id === action.id ? { ...l, ...action.patch } : l,
+        ),
+      }
+    case 'deleteBookingLink':
+      return { ...state, bookingLinks: state.bookingLinks.filter((l) => l.id !== action.id) }
+    case 'updateSettings':
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          ...action.patch,
+          // deep-merge notifications if provided
+          notifications: action.patch.notifications
+            ? { ...state.settings.notifications, ...action.patch.notifications }
+            : state.settings.notifications,
+        },
+      }
     default:
       return state
   }
@@ -179,6 +256,7 @@ type StoreValue = {
   toggleTheme: () => void
   queueProposals: (changes: ProposedChange[]) => string[]
   createQuickEvent: (day: Date, hour: number, minute?: number) => CalendarEvent
+  updateSettings: (patch: Partial<Settings>) => void
 }
 
 const StoreContext = createContext<StoreValue | null>(null)
@@ -271,6 +349,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return event
   }, [])
 
+  const updateSettings = useCallback(
+    (patch: Partial<Settings>) => dispatch({ type: 'updateSettings', patch }),
+    [],
+  )
+
   const value = useMemo<StoreValue>(
     () => ({
       state,
@@ -281,6 +364,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleTheme,
       queueProposals,
       createQuickEvent,
+      updateSettings,
     }),
     [
       state,
@@ -290,6 +374,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleTheme,
       queueProposals,
       createQuickEvent,
+      updateSettings,
     ],
   )
 

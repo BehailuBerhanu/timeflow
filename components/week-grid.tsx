@@ -38,11 +38,33 @@ type DragState = {
 export function WeekGrid({
   anchor,
   onOpenEvent,
+  onCreateAt,
 }: {
   anchor: Date
   onOpenEvent: (event: CalendarEvent) => void
+  onCreateAt?: (template: CalendarEvent) => void
 }) {
-  const { visibleEvents, dispatch, createQuickEvent } = useStore()
+  const { visibleEvents, dispatch, state } = useStore()
+  const tzLabel = useMemo(() => {
+    try {
+      const tz = state.settings.timezone
+      const offset = -new Date(
+        new Date().toLocaleString('en-US', { timeZone: tz }),
+      ).getTimezoneOffset?.() ?? 0
+      // derive the UTC offset from the stored IANA timezone
+      const now = new Date()
+      const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }))
+      const tzDate = new Date(now.toLocaleString('en-US', { timeZone: tz }))
+      const diffHours = (tzDate.getTime() - utcDate.getTime()) / 3_600_000
+      const sign = diffHours >= 0 ? '+' : '-'
+      const abs = Math.abs(diffHours)
+      const h = Math.floor(abs)
+      const m = Math.round((abs - h) * 60)
+      return m ? `GMT${sign}${h}:${String(m).padStart(2, '0')}` : `GMT${sign}${h}`
+    } catch {
+      return 'GMT+0'
+    }
+  }, [state.settings.timezone])
   const days = useMemo(() => weekDays(anchor), [anchor])
   const scrollRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -175,7 +197,7 @@ export function WeekGrid({
       {/* day header */}
       <div className="grid shrink-0 grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-border bg-panel">
         <div className="flex items-end justify-end pb-2 pr-2 text-[10px] font-medium text-muted-foreground">
-          {timezoneLabel()}
+          {tzLabel}
         </div>
         {days.map((day) => {
           const isToday = now ? isSameDay(day, now) : false
@@ -258,12 +280,21 @@ export function WeekGrid({
                     const minutes = snap15(
                       ((e.clientY - rect.top) / HOUR_HEIGHT) * 60 + DAY_START_HOUR * 60,
                     )
-                    const created = createQuickEvent(
-                      day,
-                      Math.floor(minutes / 60),
-                      minutes % 60,
-                    )
-                    onOpenEvent(created)
+                    const start = atTime(day, Math.floor(minutes / 60), minutes % 60)
+                    const template: CalendarEvent = {
+                      id: '',
+                      title: '',
+                      start: toLocalISO(start),
+                      end: toLocalISO(addMinutes(start, 60)),
+                      calendarId: 'work',
+                      tone: 'blue',
+                      attendees: [],
+                    }
+                    if (onCreateAt) {
+                      onCreateAt(template)
+                    } else {
+                      onOpenEvent(template)
+                    }
                   }}
                 >
                   {laid.map(({ event, top, height, left, width }) => (

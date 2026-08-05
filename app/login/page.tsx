@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Sparkles } from 'lucide-react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 /** Inline Google "G" logo — no external image needed */
@@ -74,8 +74,15 @@ export default function LoginPage() {
       <div className="flex w-full max-w-sm flex-col items-center gap-8 px-6">
         {/* Wordmark */}
         <div className="flex flex-col items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-brand">
-            <Sparkles className="size-6 text-primary-foreground dark:text-[#04160b]" strokeWidth={2.2} />
+          <div className="flex size-16 items-center justify-center">
+            <Image
+              src="/logo.png"
+              alt="Timeflow"
+              width={64}
+              height={64}
+              className="size-full object-contain"
+              priority
+            />
           </div>
           <div className="text-center">
             <h1 className="text-[22px] font-bold tracking-[-0.02em]">Timeflow</h1>

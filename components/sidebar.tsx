@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils'
 import type { Tone } from '@/lib/types'
 
 const NAV = [
-  { id: 'calendar', label: 'Calendar', icon: CalendarIcon, href: '/' },
+  { id: 'calendar', label: 'Calendar', icon: CalendarIcon, href: '/calendar' },
   { id: 'home', label: 'Home', icon: House, href: '/home' },
   { id: 'tasks', label: 'Tasks', icon: ListTodo, href: '/tasks' },
   { id: 'bookings', label: 'Bookings', icon: CalendarCheck, href: '/bookings' },

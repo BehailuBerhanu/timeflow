@@ -215,7 +215,7 @@ export function HomeView() {
             <span>
               <strong>{conflictsToday}</strong> scheduling conflict
               {conflictsToday > 1 ? 's' : ''} today.{' '}
-              <a href="/" className="font-medium text-brand-text underline-offset-2 hover:underline">
+              <a href="/calendar" className="font-medium text-brand-text underline-offset-2 hover:underline">
                 View calendar
               </a>
             </span>
@@ -231,7 +231,7 @@ export function HomeView() {
                 Today&rsquo;s schedule
               </p>
               <a
-                href="/"
+                href="/calendar"
                 className="flex items-center gap-1 text-[12px] font-medium text-brand-text hover:underline"
               >
                 Open calendar <ArrowRight className="size-3.5" />
@@ -407,7 +407,7 @@ export function HomeView() {
                   before they take effect.
                 </p>
                 <a
-                  href="/"
+                  href="/calendar"
                   className="mt-1 inline-flex items-center gap-1.5 self-start rounded-lg bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground transition-colors hover:brightness-95"
                 >
                   Review changes <ArrowRight className="size-3.5" />

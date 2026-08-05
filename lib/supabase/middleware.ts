@@ -36,6 +36,8 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  console.log(`[middleware] ${pathname} — user: ${user?.email ?? 'none'}`)
+
   // Public paths that never need a session
   const isPublic =
     pathname.startsWith('/login') ||

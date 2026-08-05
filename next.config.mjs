@@ -4,7 +4,13 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      {
+        // Google profile pictures (lh3.googleusercontent.com)
+        protocol: 'https',
+        hostname: '*.googleusercontent.com',
+      },
+    ],
   },
 }
 

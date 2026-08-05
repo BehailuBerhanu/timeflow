@@ -8,12 +8,12 @@ import {
   Check,
   Circle,
   Clock,
-  House,
   Link2,
   Sparkles,
 } from 'lucide-react'
 import Image from 'next/image'
 import { useStore } from '@/lib/store'
+import { useUser } from '@/hooks/use-user'
 import {
   addDays,
   durationMinutes,
@@ -21,9 +21,7 @@ import {
   findConflicts,
   formatDuration,
   formatRange,
-  isSameDay,
 } from '@/lib/time'
-import { PEOPLE } from '@/lib/seed-data'
 import { cn } from '@/lib/utils'
 
 function greeting() {
@@ -46,8 +44,17 @@ function formatDueShort(iso: string) {
 
 export function HomeView() {
   const { state } = useStore()
+  const user = useUser()
   const now = useMemo(() => new Date(), [])
-  const me = PEOPLE[0]
+
+  const displayName =
+    user?.user_metadata?.full_name ??
+    user?.user_metadata?.name ??
+    user?.email ??
+    'there'
+  const firstName = displayName.split(/\s+/)[0]
+  const avatarUrl: string | undefined =
+    user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture
 
   // Today's events, sorted by start time
   const todayEvents = useMemo(
@@ -121,16 +128,26 @@ export function HomeView() {
     <main className="scrollbar-slim flex min-h-0 flex-1 flex-col overflow-y-auto">
       {/* header */}
       <div className="flex shrink-0 items-center gap-4 border-b border-border px-6 py-5">
-        <Image
-          src={me.avatar}
-          alt={me.name}
-          width={44}
-          height={44}
-          className="size-11 rounded-full ring-2 ring-brand/30"
-        />
+        {user === undefined ? (
+          // loading skeleton
+          <span className="size-11 animate-pulse rounded-full bg-secondary" />
+        ) : avatarUrl ? (
+          <Image
+            src={avatarUrl}
+            alt={displayName}
+            width={44}
+            height={44}
+            className="size-11 rounded-full object-cover ring-2 ring-brand/30"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <span className="flex size-11 items-center justify-center rounded-full bg-brand text-[15px] font-semibold text-primary-foreground dark:text-[#04160b]">
+            {firstName.slice(0, 2).toUpperCase()}
+          </span>
+        )}
         <div>
           <h1 className="text-[18px] font-semibold tracking-[-0.02em]">
-            {greeting()}, {me.name.split(' ')[0]} 👋
+            {greeting()}, {user === undefined ? '…' : firstName} 👋
           </h1>
           <p className="text-[12px] text-muted-foreground">
             {now.toLocaleDateString('en-US', {

@@ -254,6 +254,13 @@ export function AiPanel({
                       Thinking&hellip;
                     </span>
                   ) : null}
+
+                  {/* Inline approval cards for proposals attached to this message */}
+                  {m.changeIds?.map((changeId) => {
+                    const change = state.pending.find((c) => c.id === changeId)
+                    if (!change) return null
+                    return <ApprovalCard key={changeId} change={change} compact />
+                  })}
                 </div>
               ),
             )}

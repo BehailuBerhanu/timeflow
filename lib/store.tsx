@@ -25,7 +25,11 @@ import type {
   Theme,
 } from './types'
 
-const STORAGE_KEY = 'timeflow:v1'
+const STORAGE_KEY_PREFIX = 'timeflow:v1'
+
+function storageKey(userId: string | null) {
+  return userId ? `${STORAGE_KEY_PREFIX}:${userId}` : STORAGE_KEY_PREFIX
+}
 
 const DEFAULT_SETTINGS: Settings = {
   timezone: typeof Intl !== 'undefined'
@@ -264,30 +268,50 @@ const StoreContext = createContext<StoreValue | null>(null)
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const seq = useRef(0)
+  const currentUserIdRef = useRef<string | null>(null)
 
-  // hydrate once on the client so SSR markup stays deterministic
+  // hydrate once on the client, scoped to the logged-in user
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<Persisted>
-        dispatch({ type: 'hydrate', payload: parsed })
-        return
+    async function hydrate() {
+      // Get the current user ID from Supabase
+      let userId: string | null = null
+      try {
+        const { createClient } = await import('./supabase/client')
+        const supabase = createClient()
+        const { data } = await supabase.auth.getUser()
+        userId = data.user?.id ?? null
+      } catch {
+        // No Supabase or not logged in — use anonymous key
       }
-    } catch {
-      // corrupt payload: fall through to seed
+
+      currentUserIdRef.current = userId
+      const key = storageKey(userId)
+
+      try {
+        const raw = window.localStorage.getItem(key)
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<Persisted>
+          // Always reset chat so users never see another user's conversation
+          dispatch({ type: 'hydrate', payload: { ...parsed, chat: [], pending: [] } })
+          return
+        }
+      } catch {
+        // corrupt payload: fall through to seed
+      }
+      const prefersDark =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+      dispatch({ type: 'hydrate', payload: { theme: prefersDark ? 'dark' : 'light' } })
     }
-    const prefersDark =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-    dispatch({ type: 'hydrate', payload: { theme: prefersDark ? 'dark' : 'light' } })
+
+    hydrate()
   }, [])
 
   useEffect(() => {
     if (!state.hydrated) return
     const { hydrated, ...persisted } = state
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
+      window.localStorage.setItem(storageKey(currentUserIdRef.current), JSON.stringify(persisted))
     } catch {
       // storage full or blocked: the app still works in-memory
     }

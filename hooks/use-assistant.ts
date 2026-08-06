@@ -23,6 +23,38 @@ export function useAssistant() {
       const text = raw.trim()
       if (!text || busy) return
 
+      // ── Intercept approval/rejection shortcuts ────────────────────────────
+      const pendingChanges = state.pending.filter((c) => c.status === 'pending')
+      if (/^approve( all)?$/i.test(text) && pendingChanges.length > 0) {
+        dispatch({ type: 'approveAll' })
+        const userMessage = { id: nextId('u'), role: 'user' as const, content: text }
+        const replyId = nextId('a')
+        dispatch({ type: 'addMessage', message: userMessage })
+        dispatch({
+          type: 'addMessage',
+          message: {
+            id: replyId,
+            role: 'assistant',
+            content: `✓ Applied ${pendingChanges.length} change${pendingChanges.length > 1 ? 's' : ''} to your calendar.`,
+            pending: false,
+          },
+        })
+        return
+      }
+      if (/^reject( all)?$|^dismiss( all)?$/i.test(text) && pendingChanges.length > 0) {
+        for (const c of pendingChanges) {
+          dispatch({ type: 'resolveChange', id: c.id, approved: false })
+        }
+        const userMessage = { id: nextId('u'), role: 'user' as const, content: text }
+        const replyId = nextId('a')
+        dispatch({ type: 'addMessage', message: userMessage })
+        dispatch({
+          type: 'addMessage',
+          message: { id: replyId, role: 'assistant', content: 'Dismissed — no changes made.', pending: false },
+        })
+        return
+      }
+
       const userMessage = { id: nextId('u'), role: 'user' as const, content: text }
       const replyId = nextId('a')
       dispatch({ type: 'addMessage', message: userMessage })

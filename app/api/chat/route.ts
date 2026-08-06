@@ -1,119 +1,82 @@
 /**
  * POST /api/chat
  *
- * Calls Gemini 2.5 Flash directly via @google/generative-ai.
- * Streams NDJSON to the client — one JSON object per line:
+ * Calls Groq (llama-3.3-70b-versatile) via the official groq-sdk.
+ * Runs a simple agentic loop: text response → tool call → tool result → final text.
+ *
+ * NDJSON stream to client:
  *   { type: 'text',     text: string }
  *   { type: 'proposal', change: ProposedChange }
  *   { type: 'error',    message: string }
- *
- * No Vercel AI Gateway or AI_GATEWAY_API_KEY required.
  */
 
-import {
-  GoogleGenerativeAI,
-  HarmCategory,
-  HarmBlockThreshold,
-  type FunctionDeclaration,
-  type Content,
-  SchemaType,
-} from '@google/generative-ai'
+import Groq from 'groq-sdk'
 import { buildSystemPrompt, type ChatContext } from './prompt'
 
 export const maxDuration = 60
 
-// ── Tool declarations ─────────────────────────────────────────────────────────
-// Gemini function-calling equivalents of the previous proposeCreate/Move/Delete tools.
+const MODEL = 'llama-3.3-70b-versatile'
 
-const localDateTime: FunctionDeclaration['parameters'] = {
-  type: SchemaType.STRING,
-  description: 'Local date-time, format YYYY-MM-DDTHH:mm:00, no timezone suffix',
-}
+// ── Tool definitions ──────────────────────────────────────────────────────────
 
-const TOOLS: FunctionDeclaration[] = [
+const TOOLS: Groq.Chat.CompletionCreateParams['tools'] = [
   {
-    name: 'proposeCreate',
-    description:
-      'Queue a new event for the user to approve. Use for focus blocks, meetings, workouts, anything new.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        title: {
-          type: SchemaType.STRING,
-          description: 'Short event title, max 40 characters',
+    type: 'function',
+    function: {
+      name: 'proposeCreate',
+      description: 'Queue a new calendar event for the user to approve before it is created.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title:      { type: 'string', description: 'Short event title, max 40 characters' },
+          start:      { type: 'string', description: 'Local datetime YYYY-MM-DDTHH:mm:00, no timezone' },
+          end:        { type: 'string', description: 'Local datetime YYYY-MM-DDTHH:mm:00, no timezone' },
+          tone:       { type: 'string', enum: ['blue', 'green', 'amber', 'red', 'violet', 'teal'] },
+          calendarId: { type: 'string', enum: ['work', 'personal', 'school', 'fitness'] },
+          reason:     { type: 'string', description: 'One sentence explaining why this helps' },
         },
-        start: localDateTime,
-        end: localDateTime,
-        tone: {
-          type: SchemaType.STRING,
-          description: 'green for focus/deep work, blue for meetings, red for fitness',
-          enum: ['blue', 'green', 'amber', 'red', 'violet', 'teal'],
-        },
-        calendarId: {
-          type: SchemaType.STRING,
-          enum: ['work', 'personal', 'school', 'fitness'],
-        },
-        reason: {
-          type: SchemaType.STRING,
-          description: 'One short sentence on why this helps',
-        },
+        required: ['title', 'start', 'end', 'reason'],
       },
-      required: ['title', 'start', 'end', 'reason'],
     },
   },
   {
-    name: 'proposeMove',
-    description:
-      'Queue a reschedule of an existing event. Pass the exact event id from the schedule list.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        eventId: { type: SchemaType.STRING },
-        start: localDateTime,
-        end: localDateTime,
-        reason: {
-          type: SchemaType.STRING,
-          description: 'One short sentence on why this helps',
+    type: 'function',
+    function: {
+      name: 'proposeMove',
+      description: 'Queue a reschedule of an existing event. Use the exact event ID from the schedule.',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string', description: 'Exact event ID from the user schedule' },
+          start:   { type: 'string', description: 'New start: YYYY-MM-DDTHH:mm:00' },
+          end:     { type: 'string', description: 'New end: YYYY-MM-DDTHH:mm:00' },
+          reason:  { type: 'string' },
         },
+        required: ['eventId', 'start', 'end', 'reason'],
       },
-      required: ['eventId', 'start', 'end', 'reason'],
     },
   },
   {
-    name: 'proposeDelete',
-    description:
-      'Queue the removal of an existing event. Pass the exact event id from the schedule list.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        eventId: { type: SchemaType.STRING },
-        reason: {
-          type: SchemaType.STRING,
-          description: 'One short sentence on why this helps',
+    type: 'function',
+    function: {
+      name: 'proposeDelete',
+      description: 'Queue removal of an existing event.',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string' },
+          reason:  { type: 'string' },
         },
+        required: ['eventId', 'reason'],
       },
-      required: ['eventId', 'reason'],
     },
   },
 ]
 
 const TOOL_TO_KIND: Record<string, 'create' | 'move' | 'delete'> = {
   proposeCreate: 'create',
-  proposeMove: 'move',
+  proposeMove:   'move',
   proposeDelete: 'delete',
-}
-
-// ── Error helper ──────────────────────────────────────────────────────────────
-
-function describeError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error ?? '')
-  if (/api.?key|unauthorized|401|403/i.test(raw)) {
-    return 'Gemini rejected the API key. Make sure GEMINI_API_KEY in .env.local is a valid key from https://aistudio.google.com/app/apikey (it should start with "AIza").'
-  }
-  if (/rate.?limit|429|quota/i.test(raw)) {
-    return 'Rate limited by Gemini. Wait a moment and try again.'
-  }
-  return `The assistant hit an error: ${raw.slice(0, 200)}`
 }
 
 // ── Request body type ─────────────────────────────────────────────────────────
@@ -126,7 +89,7 @@ type Body = {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  // Parse body
+  // 1. Parse body
   let body: Body
   try {
     body = (await req.json()) as Body
@@ -134,50 +97,34 @@ export async function POST(req: Request) {
     return new Response('Invalid JSON body', { status: 400 })
   }
 
-  const messages = (body.messages ?? []).slice(-12).filter((m) => m.content?.trim())
-  if (!messages.length) return new Response('No messages', { status: 400 })
+  const incomingMessages = (body.messages ?? []).slice(-12).filter((m) => m.content?.trim())
+  if (!incomingMessages.length) return new Response('No messages', { status: 400 })
 
-  const apiKey = process.env.GEMINI_API_KEY
+  // 2. Check API key
+  const apiKey = process.env.GROQ_API_KEY?.trim()
   if (!apiKey) {
-    const encoder = new TextEncoder()
-    const errLine = JSON.stringify({
+    const line = JSON.stringify({
       type: 'error',
-      message: 'GEMINI_API_KEY is not set. Add it to your environment variables.',
+      message: 'GROQ_API_KEY is not set. Add it to .env.local — get a free key at console.groq.com.',
     }) + '\n'
-    return new Response(encoder.encode(errLine), {
-      headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
-    })
+    return new Response(line, { headers: { 'Content-Type': 'application/x-ndjson' } })
   }
 
-  // Build Gemini conversation history.
-  // The system prompt is passed as the first user turn + model ack (Gemini's
-  // preferred pattern for system instructions in the chat history).
+  // 3. Build Groq client + message history
+  const groq = new Groq({ apiKey })
+
   const systemPrompt = buildSystemPrompt(body.context)
 
-  const history: Content[] = [
-    { role: 'user', parts: [{ text: systemPrompt }] },
-    { role: 'model', parts: [{ text: 'Understood. I am ready to help schedule.' }] },
-    ...messages.slice(0, -1).map((m) => ({
-      role: m.role === 'user' ? 'user' : ('model' as const),
-      parts: [{ text: m.content }],
+  type Msg = Groq.Chat.CompletionMessageParam
+  const messages: Msg[] = [
+    { role: 'system', content: systemPrompt },
+    ...incomingMessages.map((m) => ({
+      role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
     })),
   ]
 
-  const lastMessage = messages[messages.length - 1].content
-
-  // Init Gemini
-  const genai = new GoogleGenerativeAI(apiKey)
-  const model = genai.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    tools: [{ functionDeclarations: TOOLS }],
-    safetySettings: [
-      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-    ],
-  })
-
-  const chat = model.startChat({ history })
-
+  // 4. Stream NDJSON response
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream<Uint8Array>({
@@ -185,79 +132,91 @@ export async function POST(req: Request) {
       const send = (payload: unknown) =>
         controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`))
 
+      // 30-second timeout guard
+      const timeoutId = setTimeout(() => {
+        console.error('[chat] Request timed out after 30s')
+        send({ type: 'error', message: 'Request timed out. Please try again.' })
+        controller.close()
+      }, 30_000)
+
       try {
-        // Up to 4 agentic steps: text → tool call → tool result → final text
-        let pendingToolCalls: { name: string; args: Record<string, unknown> }[] = []
-        let stepCount = 0
         const MAX_STEPS = 4
 
-        // First turn: send the user message
-        const result = await chat.sendMessageStream(lastMessage)
+        for (let step = 0; step < MAX_STEPS; step++) {
+          console.log(`[chat] step ${step + 1}/${MAX_STEPS} — calling Groq`)
 
-        let accumulatedText = ''
-
-        for await (const chunk of result.stream) {
-          const candidate = chunk.candidates?.[0]
-          if (!candidate) continue
-
-          for (const part of candidate.content?.parts ?? []) {
-            if (part.text) {
-              accumulatedText += part.text
-              send({ type: 'text', text: part.text })
-            }
-            if (part.functionCall) {
-              pendingToolCalls.push({
-                name: part.functionCall.name,
-                args: (part.functionCall.args ?? {}) as Record<string, unknown>,
-              })
-            }
-          }
-        }
-
-        // Agentic loop: handle tool calls → send results → get next response
-        while (pendingToolCalls.length > 0 && stepCount < MAX_STEPS) {
-          stepCount++
-
-          // Emit proposals to the client
-          const toolResults = pendingToolCalls.map(({ name, args }) => {
-            const kind = TOOL_TO_KIND[name]
-            if (kind) {
-              send({ type: 'proposal', change: { kind, ...args } })
-            }
-            return {
-              functionResponse: {
-                name,
-                response: { result: 'Queued for approval.' },
-              },
-            }
+          // Only offer tools on the first turn; after tool results just ask for plain text
+          const isToolStep = step === 0
+          const completion = await groq.chat.completions.create({
+            model: MODEL,
+            messages,
+            tools: isToolStep ? TOOLS : undefined,
+            tool_choice: isToolStep ? 'auto' : undefined,
+            temperature: 0.4,
+            max_tokens: 1024,
           })
 
-          pendingToolCalls = []
-
-          // Send tool results back to Gemini for a follow-up text response
-          const followUp = await chat.sendMessageStream(toolResults)
-
-          for await (const chunk of followUp.stream) {
-            const candidate = chunk.candidates?.[0]
-            if (!candidate) continue
-
-            for (const part of candidate.content?.parts ?? []) {
-              if (part.text) {
-                send({ type: 'text', text: part.text })
-              }
-              if (part.functionCall) {
-                pendingToolCalls.push({
-                  name: part.functionCall.name,
-                  args: (part.functionCall.args ?? {}) as Record<string, unknown>,
-                })
-              }
-            }
+          const choice = completion.choices?.[0]
+          if (!choice) {
+            console.warn('[chat] No choices in Groq response')
+            break
           }
+
+          const msg = choice.message
+          console.log(`[chat] finish_reason=${choice.finish_reason} content_len=${msg.content?.length ?? 0} tool_calls=${msg.tool_calls?.length ?? 0}`)
+
+          // Emit text content
+          if (msg.content) {
+            send({ type: 'text', text: msg.content })
+          }
+
+          // Handle tool calls
+          if (choice.finish_reason === 'tool_calls' && msg.tool_calls?.length) {
+            // Add assistant turn to history
+            messages.push(msg as Msg)
+
+            for (const tc of msg.tool_calls) {
+              const kind = TOOL_TO_KIND[tc.function.name]
+              if (kind) {
+                let args: Record<string, unknown> = {}
+                try {
+                  args = JSON.parse(tc.function.arguments) as Record<string, unknown>
+                } catch {
+                  console.warn('[chat] Failed to parse tool args:', tc.function.arguments)
+                }
+                send({ type: 'proposal', change: { kind, ...args } })
+              }
+
+              // Add tool result to history
+              messages.push({
+                role: 'tool',
+                tool_call_id: tc.id,
+                content: 'Queued for approval.',
+              })
+            }
+
+            // Continue loop to get follow-up text from Groq
+            continue
+          }
+
+          // stop or length — done
+          break
         }
-      } catch (error) {
-        console.error('[chat] Gemini call failed:', error)
-        send({ type: 'error', message: describeError(error) })
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err ?? '')
+        console.error('[chat] Groq error:', raw)
+
+        let msg = `Something went wrong: ${raw.slice(0, 200)}`
+        if (/429|quota|rate.?limit/i.test(raw))
+          msg = "You've hit Groq's rate limit. Wait a moment and try again."
+        if (/401|403|api.?key|invalid_api/i.test(raw))
+          msg = 'Groq API key rejected. Check GROQ_API_KEY in .env.local.'
+        if (/timeout|ECONNRESET|network/i.test(raw))
+          msg = 'Network timeout reaching Groq. Check your internet connection and try again.'
+
+        send({ type: 'error', message: msg })
       } finally {
+        clearTimeout(timeoutId)
         controller.close()
       }
     },

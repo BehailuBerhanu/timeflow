@@ -91,7 +91,7 @@ export function SiteHeader() {
             Log in
           </Link>
           <Link
-            href="/home"
+            href="/signup"
             className="group hidden h-9 items-center gap-1.5 rounded-full bg-primary pl-4 pr-3.5 text-[13.5px] font-semibold text-primary-foreground transition-[filter,transform] hover:brightness-110 active:translate-y-px sm:flex"
           >
             Try the live demo
@@ -128,7 +128,7 @@ export function SiteHeader() {
             ))}
             <div className="mt-4 flex flex-col gap-2 pb-2">
               <Link
-                href="/home"
+                href="/signup"
                 className="flex h-11 items-center justify-center gap-1.5 rounded-full bg-primary text-[14px] font-semibold text-primary-foreground"
               >
                 Try the live demo

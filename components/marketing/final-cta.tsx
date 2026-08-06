@@ -26,7 +26,7 @@ export function FinalCta() {
               and every edit still needs your yes.
             </p>
             <Link
-              href="/home"
+              href="/signup"
               className="group mt-9 flex h-12 items-center gap-2 rounded-full bg-primary pl-6 pr-5 text-[15px] font-semibold text-primary-foreground transition-[filter,transform] hover:brightness-110 active:translate-y-px"
             >
               Try the live demo

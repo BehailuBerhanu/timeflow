@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import {
   ArrowRight,
   CalendarCheck,
@@ -14,6 +14,7 @@ import {
 import Image from 'next/image'
 import { useStore } from '@/lib/store'
 import { useUser } from '@/hooks/use-user'
+import { createClient } from '@/lib/supabase/client'
 import {
   addDays,
   durationMinutes,
@@ -23,6 +24,63 @@ import {
   formatRange,
 } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { AiSuggestionCard, type AiSuggestion } from '@/components/ai-suggestion-card'
+
+// ── Pending AI suggestions ────────────────────────────────────────────────────
+
+function PendingSuggestions() {
+  const [suggestions, setSuggestions] = useState<AiSuggestion[]>([])
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    async function load() {
+      const { data } = await supabase
+        .from('suggestions')
+        .select('id, title, reason, current_json, proposed_json')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+
+      if (data) {
+        setSuggestions(
+          data.map((row) => ({
+            id: row.id,
+            title: row.title,
+            reason: row.reason,
+            current: row.current_json,
+            proposed: row.proposed_json,
+          })),
+        )
+      }
+    }
+
+    load()
+  }, [])
+
+  if (suggestions.length === 0) return null
+
+  function handleResolved(id: string) {
+    setSuggestions((prev) => prev.filter((s) => s.id !== id))
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Sparkles className="size-4 text-brand" strokeWidth={2.2} aria-hidden />
+        <p className="text-[13px] font-semibold text-foreground">
+          AI suggestions
+        </p>
+      </div>
+      {suggestions.map((s) => (
+        <AiSuggestionCard
+          key={s.id}
+          suggestion={s}
+          onResolved={handleResolved}
+        />
+      ))}
+    </div>
+  )
+}
 
 function greeting() {
   const h = new Date().getHours()
@@ -221,6 +279,9 @@ export function HomeView() {
             </span>
           </div>
         )}
+
+        {/* AI suggestions */}
+        <PendingSuggestions />
 
         {/* main two-col grid */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

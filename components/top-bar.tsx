@@ -62,10 +62,15 @@ export function TopBar({
 
   return (
     <header className="flex shrink-0 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5">
-      <a href="/calendar" className="flex shrink-0 items-center gap-2.5">
-        <span className="flex size-8 items-center justify-center rounded-[9px] bg-brand text-[13px] font-bold text-primary-foreground dark:text-[#04160b]">
-          25
-        </span>
+      <a href="/calendar" className="flex shrink-0 items-center gap-0">
+        <Image
+          src="/logo.png"
+          alt=""
+          width={78}
+          height={78}
+          className="size-[78px] object-contain"
+          priority
+        />
         <span className="text-[17px] font-semibold tracking-[-0.02em]">Timeflow</span>
       </a>
 

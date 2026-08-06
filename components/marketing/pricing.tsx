@@ -153,7 +153,7 @@ export function Pricing() {
               </p>
 
               <Link
-                href={plan.name === 'Team' ? '/login' : '/home'}
+                href={plan.name === 'Team' ? '/login' : '/signup'}
                 className={cn(
                   'mt-7 flex h-11 items-center justify-center rounded-full text-[14px] font-semibold transition-[filter,background-color]',
                   plan.featured

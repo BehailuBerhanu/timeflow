@@ -3,12 +3,12 @@ import { cn } from '@/lib/utils'
 
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <span aria-hidden className={cn('flex shrink-0 items-center justify-center', className)} style={{ width: 66, height: 66 }}>
+    <span aria-hidden className={cn('flex shrink-0 items-center justify-center', className)} style={{ width: 78, height: 78 }}>
       <Image
         src="/logo.png"
         alt="Timeflow"
-        width={66}
-        height={66}
+        width={78}
+        height={78}
         className="size-full object-contain"
         priority
       />
@@ -24,7 +24,7 @@ export function Logo({
   markClassName?: string
 }) {
   return (
-    <span className={cn('flex items-center gap-2.5', className)}>
+    <span className={cn('flex items-center gap-0', className)}>
       <LogoMark className={markClassName} />
       <span className="text-[17px] font-semibold tracking-[-0.02em] text-foreground">
         Timeflow

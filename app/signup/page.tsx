@@ -1,10 +1,10 @@
 import { Suspense } from 'react'
 import { AuthCard } from '@/components/auth-card'
 
-export default function LoginPage() {
+export default function SignupPage() {
   return (
     <Suspense>
-      <AuthCard mode="login" />
+      <AuthCard mode="signup" />
     </Suspense>
   )
 }

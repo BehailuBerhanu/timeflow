@@ -129,7 +129,7 @@ export function useAssistant() {
             patch: {
               content:
                 content ||
-                'I could not reach the model just now. Check that AI Gateway is connected and try again.',
+                'I could not reach the model just now. Check that GEMINI_API_KEY is set and try again.',
             },
           })
         }

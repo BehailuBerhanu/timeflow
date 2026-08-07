@@ -25,7 +25,7 @@ const COLUMNS = [
     links: [
       { label: 'Security', href: '#security' },
       { label: 'FAQ', href: '#faq' },
-      { label: 'Privacy', href: '#security' },
+      { label: 'Privacy', href: '/privacy' },
       { label: 'Log in', href: '/login' },
     ],
   },

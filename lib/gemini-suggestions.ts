@@ -7,6 +7,7 @@ import Groq from 'groq-sdk'
 import type { GCalEvent } from './google-calendar'
 
 const MODEL = 'llama-3.3-70b-versatile'
+const TIMEOUT_MS = 30_000
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,11 +19,67 @@ export type SuggestionProposal = {
   reason: string
 }
 
+// ── Validation helpers ────────────────────────────────────────────────────────
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function isNonEmptyString(v: unknown, maxLen = 500): boolean {
+  return typeof v === 'string' && v.trim().length > 0 && v.length <= maxLen
+}
+
+function validateProposal(parsed: unknown): SuggestionProposal | null {
+  if (!isPlainObject(parsed)) {
+    console.error('[gemini-suggestions] Proposal is not a plain object:', JSON.stringify(parsed))
+    return null
+  }
+  for (const field of ['event_id', 'title', 'reason'] as const) {
+    if (!isNonEmptyString((parsed as Record<string, unknown>)[field])) {
+      console.error(
+        `[gemini-suggestions] Invalid proposal — '${field}': ${JSON.stringify((parsed as Record<string, unknown>)[field])}`,
+      )
+      return null
+    }
+  }
+  for (const nested of ['current', 'proposed'] as const) {
+    const obj = (parsed as Record<string, unknown>)[nested]
+    if (!isPlainObject(obj) || Object.keys(obj).length === 0) {
+      console.error(
+        `[gemini-suggestions] Invalid proposal — missing or malformed '${nested}': ${JSON.stringify(obj)}`,
+      )
+      return null
+    }
+    for (const sub of ['date', 'start_time', 'end_time', 'calendar'] as const) {
+      if (!isNonEmptyString((obj as Record<string, unknown>)[sub], 50)) {
+        console.error(
+          `[gemini-suggestions] Invalid proposal — '${nested}.${sub}': ${JSON.stringify((obj as Record<string, unknown>)[sub])}`,
+        )
+        return null
+      }
+    }
+  }
+  return parsed as SuggestionProposal
+}
+
+// ── Retry predicate ───────────────────────────────────────────────────────────
+
+function isRetryable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return (
+    /429|rate.?limit|quota/i.test(msg) ||
+    /ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed|socket|GROQ_TIMEOUT/i.test(msg)
+  )
+}
+
 // ── Prompt ────────────────────────────────────────────────────────────────────
 
 function buildPrompt(events: GCalEvent[], userTimezone: string): string {
   const eventsText = events
-    .map((e) => `ID: ${e.id}\nTitle: ${e.summary}\nStart: ${e.start.dateTime}\nEnd: ${e.end.dateTime}`)
+    .map(
+      (e) =>
+        `ID: ${e.id}\nTitle: ${e.summary}\nStart: ${e.start.dateTime}\nEnd: ${e.end.dateTime}`,
+    )
     .join('\n\n')
 
   return `You are a scheduling assistant. Analyze these Google Calendar events for the next 7 days and identify ONE high-value improvement.
@@ -71,39 +128,61 @@ export async function generateSuggestion(
   const groq = new Groq({ apiKey })
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController()
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+
     try {
-      const completion = await groq.chat.completions.create({
-        model: MODEL,
-        messages: [{ role: 'user', content: buildPrompt(events, userTimezone) }],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-        max_tokens: 512,
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          controller.abort()
+          reject(new Error('GROQ_TIMEOUT'))
+        }, TIMEOUT_MS)
       })
+
+      const groqPromise = groq.chat.completions.create(
+        {
+          model: MODEL,
+          messages: [{ role: 'user', content: buildPrompt(events, userTimezone) }],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+          max_tokens: 512,
+        },
+        { signal: controller.signal },
+      )
+
+      const completion = await Promise.race([groqPromise, timeoutPromise])
+      clearTimeout(timeoutId)
 
       const text = completion.choices?.[0]?.message?.content
       if (!text) return null
 
-      let parsed: SuggestionProposal
+      let parsed: unknown
       try {
-        parsed = JSON.parse(text) as SuggestionProposal
+        parsed = JSON.parse(text)
       } catch {
         console.error('[gemini-suggestions] Failed to parse JSON:', text)
         return null
       }
 
-      if (!parsed.event_id || !parsed.title || !parsed.reason) {
-        console.error('[gemini-suggestions] Incomplete proposal:', parsed)
-        return null
+      return validateProposal(parsed)
+    } catch (err: unknown) {
+      clearTimeout(timeoutId)
+
+      const isTimeout = err instanceof Error && err.message === 'GROQ_TIMEOUT'
+      if (isTimeout) {
+        console.error('[gemini-suggestions] Groq call timed out after 30 s')
       }
 
-      return parsed
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      const isRateLimit = /429|rate.?limit|quota/i.test(msg)
-      if (isRateLimit && attempt < MAX_RETRIES) {
+      if (isRetryable(err) && attempt < MAX_RETRIES) {
         await new Promise((r) => setTimeout(r, 2000 * attempt))
         continue
       }
+
+      // Final attempt timed out — return null instead of throwing
+      if (isTimeout) {
+        return null
+      }
+
       throw err
     }
   }

@@ -7,6 +7,7 @@ import {
   Bell,
   ChevronDown,
   CircleQuestionMark,
+  FlaskConical,
   LogOut,
   Plus,
   Search,
@@ -45,6 +46,35 @@ export function TopBar({
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // ── Dev: manual suggestion trigger ───────────────────────────────────────
+  const [devGenerating, setDevGenerating] = useState(false)
+  const [devResult, setDevResult] = useState<string | null>(null)
+
+  async function triggerSuggestion() {
+    setDevGenerating(true)
+    setDevResult(null)
+    try {
+      const res = await fetch('/api/suggestions/generate', {
+        method: 'POST',
+        headers: { 'X-Dev-Trigger': '1' },
+      })
+      const data = await res.json() as Record<string, unknown>
+      if (!res.ok) {
+        setDevResult(`Error: ${String(data.error ?? res.status)}`)
+      } else if (data.success) {
+        setDevResult(`✓ Created suggestion ${String(data.suggestionId).slice(0, 8)}…`)
+      } else {
+        setDevResult(String(data.message ?? 'Done'))
+      }
+    } catch (err) {
+      setDevResult(`Network error: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setDevGenerating(false)
+      setTimeout(() => setDevResult(null), 5000)
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const displayName =
     user?.user_metadata?.full_name ??
@@ -97,6 +127,35 @@ export function TopBar({
           <span className="hidden sm:inline">New event</span>
           <ChevronDown className="hidden size-3.5 opacity-70 sm:inline" aria-hidden />
         </Button>
+
+        {/* Dev-only: trigger suggestion generation without the cron */}
+        {process.env.NODE_ENV !== 'production' && (
+          <div className="relative hidden items-center md:flex">
+            <button
+              type="button"
+              onClick={triggerSuggestion}
+              disabled={devGenerating}
+              title="[DEV] Generate suggestion now"
+              aria-label="Generate suggestion now (dev only)"
+              className={cn(
+                'flex h-10 items-center gap-1.5 rounded-xl border border-dashed px-3 text-[12px] font-medium transition-colors',
+                devGenerating
+                  ? 'cursor-not-allowed border-border text-muted-foreground opacity-60'
+                  : 'border-brand/40 text-brand hover:bg-brand/10',
+              )}
+            >
+              <FlaskConical className="size-3.5 shrink-0" aria-hidden />
+              <span className="hidden lg:inline">
+                {devGenerating ? 'Generating…' : 'Gen suggestion'}
+              </span>
+            </button>
+            {devResult && (
+              <span className="absolute left-full ml-2 whitespace-nowrap rounded-lg border border-border bg-panel px-2.5 py-1 text-[11.5px] text-muted-foreground shadow-sm">
+                {devResult}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="hidden items-center gap-0.5 md:flex">
           <button

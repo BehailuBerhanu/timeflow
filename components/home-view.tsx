@@ -30,16 +30,29 @@ import { AiSuggestionCard, type AiSuggestion } from '@/components/ai-suggestion-
 
 function PendingSuggestions() {
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([])
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
 
     async function load() {
-      const { data } = await supabase
+      // Wait for the session to be available before querying
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
+        setLoaded(true)
+        return
+      }
+
+      const { data, error } = await supabase
         .from('suggestions')
         .select('id, title, reason, current_json, proposed_json')
         .eq('status', 'pending')
+        .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('[PendingSuggestions] fetch failed:', error)
+      }
 
       if (data) {
         setSuggestions(
@@ -52,6 +65,7 @@ function PendingSuggestions() {
           })),
         )
       }
+      setLoaded(true)
     }
 
     load()

@@ -14,7 +14,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchUpcomingEvents, refreshGoogleToken } from '@/lib/google-calendar'
-import { generateSuggestion } from '@/lib/gemini-suggestions'
+import { generateSuggestion, type UserPreferences } from '@/lib/gemini-suggestions'
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 //
@@ -169,12 +169,31 @@ async function handlePost(req: Request) {
     return NextResponse.json({ message: 'No upcoming events found' }, { status: 200 })
   }
 
+  // ── Fetch user preferences (optional — fall back gracefully) ─────────────
+  let userPreferences: UserPreferences | undefined
+  try {
+    const { data: prefRow } = await supabase
+      .from('user_preferences')
+      .select('calendar_labels, focus_hours')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (prefRow) {
+      userPreferences = {
+        calendar_labels: (prefRow.calendar_labels as Record<string, 'work' | 'personal'>) ?? {},
+        focus_hours: (prefRow.focus_hours as { start: string; end: string } | null) ?? null,
+      }
+    }
+  } catch (err) {
+    console.error('[suggestions/generate] preferences-fetch failed (continuing without):', err)
+  }
+
   // ── Generate suggestion via Groq ──────────────────────────────────────────
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
 
   let proposal
   try {
-    proposal = await generateSuggestion(events, userTimezone)
+    proposal = await generateSuggestion(events, userTimezone, userPreferences)
   } catch (err) {
     console.error('[suggestions/generate] groq-generation — full error:', expandError(err))
     return NextResponse.json({ error: 'Gemini generation failed' }, { status: 500 })

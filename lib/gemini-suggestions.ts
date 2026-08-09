@@ -19,6 +19,11 @@ export type SuggestionProposal = {
   reason: string
 }
 
+export type UserPreferences = {
+  calendar_labels: Record<string, 'work' | 'personal'>
+  focus_hours: { start: string; end: string } | null
+}
+
 // ── Validation helpers ────────────────────────────────────────────────────────
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -74,7 +79,7 @@ function isRetryable(err: unknown): boolean {
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
 
-function buildPrompt(events: GCalEvent[], userTimezone: string): string {
+function buildPrompt(events: GCalEvent[], userTimezone: string, preferences?: UserPreferences): string {
   const eventsText = events
     .map(
       (e) =>
@@ -82,10 +87,25 @@ function buildPrompt(events: GCalEvent[], userTimezone: string): string {
     )
     .join('\n\n')
 
+  // Build preferences section if provided
+  let prefSection = ''
+  if (preferences) {
+    const labelEntries = Object.entries(preferences.calendar_labels)
+    if (labelEntries.length > 0) {
+      const labelList = labelEntries
+        .map(([name, label]) => `  - "${name}": ${label}`)
+        .join('\n')
+      prefSection += `\nCalendar labels (use these to avoid scheduling work events into personal time):\n${labelList}`
+    }
+    if (preferences.focus_hours) {
+      prefSection += `\nProtected focus window: ${preferences.focus_hours.start}–${preferences.focus_hours.end} — do not propose any event change that starts or ends within this time range.`
+    }
+  }
+
   return `You are a scheduling assistant. Analyze these Google Calendar events for the next 7 days and identify ONE high-value improvement.
 
 User timezone: ${userTimezone}
-Today: ${new Date().toISOString().slice(0, 10)}
+Today: ${new Date().toISOString().slice(0, 10)}${prefSection}
 
 Events:
 ${eventsText}
@@ -119,6 +139,7 @@ const MAX_RETRIES = 2
 export async function generateSuggestion(
   events: GCalEvent[],
   userTimezone = 'UTC',
+  preferences?: UserPreferences,
 ): Promise<SuggestionProposal | null> {
   if (events.length === 0) return null
 
@@ -142,7 +163,7 @@ export async function generateSuggestion(
       const groqPromise = groq.chat.completions.create(
         {
           model: MODEL,
-          messages: [{ role: 'user', content: buildPrompt(events, userTimezone) }],
+          messages: [{ role: 'user', content: buildPrompt(events, userTimezone, preferences) }],
           response_format: { type: 'json_object' },
           temperature: 0.3,
           max_tokens: 512,

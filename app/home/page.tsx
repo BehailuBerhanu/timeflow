@@ -11,9 +11,11 @@ export default function HomePage() {
   const { pendingCount, state } = useStore()
   const [collapsed, setCollapsed] = useState(false)
   const { preferences, loading, refetch } = usePreferences()
+  // Once dismissed (saved or skipped), hide the modal regardless of preferences state
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
 
-  // Show onboarding when preferences have loaded and no row exists
-  const showOnboarding = !loading && preferences === null
+  // Show onboarding when preferences have loaded, no row exists, and not yet dismissed
+  const showOnboarding = !loading && preferences === null && !onboardingDismissed
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
@@ -23,8 +25,12 @@ export default function HomePage() {
     return () => mq.removeEventListener('change', apply)
   }, [])
 
-  // Calendar names from the store for the label step
   const calendarNames = state.calendars.map((c) => c.name)
+
+  async function handleOnboardingDone() {
+    await refetch()
+    setOnboardingDismissed(true)
+  }
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -40,7 +46,7 @@ export default function HomePage() {
       {showOnboarding && (
         <OnboardingModal
           calendarNames={calendarNames}
-          onDone={refetch}
+          onDone={handleOnboardingDone}
         />
       )}
     </div>

@@ -225,6 +225,29 @@ async function handlePost(req: Request) {
     )
   }
 
+  // ── Dismissed-pattern suppression check ──────────────────────────────────
+  const windowStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: patterns, error: patternFetchError } = await supabase
+    .from('dismissed_patterns')
+    .select('event_title_pattern')
+    .eq('user_id', userId)
+    .gte('dismissed_at', windowStart)
+
+  if (patternFetchError) {
+    console.error('[suggestions/generate] dismissed-patterns-fetch:', patternFetchError)
+    // Non-fatal — proceed with empty list
+  }
+
+  const dismissedTitles = new Set(
+    (patterns ?? []).map((p: { event_title_pattern: string }) => p.event_title_pattern),
+  )
+  const normalizedTitle = proposal.title.toLowerCase().trim()
+
+  if (dismissedTitles.has(normalizedTitle)) {
+    console.log(`[suggestions/generate] skipped — matches dismissed pattern: "${normalizedTitle}"`)
+    return NextResponse.json({ message: 'skipped — matches dismissed pattern' }, { status: 200 })
+  }
+
   // ── Store in Supabase ─────────────────────────────────────────────────────
   const { data: inserted, error: insertError } = await supabase
     .from('suggestions')

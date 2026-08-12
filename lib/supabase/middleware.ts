@@ -4,14 +4,17 @@ import { type NextRequest, NextResponse } from 'next/server'
 /** Paths that render without a session. */
 function isPublicPath(pathname: string) {
   return (
-    // the marketing landing page
     pathname === '/' ||
     pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/terms') ||
+    pathname.startsWith('/privacy') ||
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/icon') ||
     pathname.startsWith('/apple-icon') ||
+    pathname.startsWith('/logo') ||
     pathname.startsWith('/avatars') ||
     pathname.startsWith('/placeholder')
   )
@@ -69,7 +72,11 @@ export async function updateSession(request: NextRequest) {
 
   if (!user) {
     const redirectUrl = request.nextUrl.clone()
+    const next = request.nextUrl.pathname
     redirectUrl.pathname = '/login'
+    if (next !== '/login') {
+      redirectUrl.searchParams.set('next', next)
+    }
     return NextResponse.redirect(redirectUrl)
   }
 

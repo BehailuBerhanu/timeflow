@@ -257,7 +257,7 @@ export function OnboardingModal({ calendarNames, onDone }: OnboardingModalProps)
       if (!skip) {
         // Show confirmation for 5 seconds, or dismiss on click/tap
         setSaved(true)
-        setTimeout(() => onDone(), 5000)
+        setTimeout(() => onDone(), 2000)
       } else {
         onDone()
       }

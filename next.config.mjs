@@ -1,12 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },
   images: {
     remotePatterns: [
       {
-        // Google profile pictures (lh3.googleusercontent.com)
         protocol: 'https',
         hostname: '*.googleusercontent.com',
       },
